@@ -15,8 +15,10 @@
     "esri/Map",
     "esri/views/MapView",
     "esri/layers/FeatureLayer",
-    "esri/widgets/Legend"
-  ], function(Map, MapView, FeatureLayer, Legend) {
+    "esri/widgets/Legend",
+    "esri/rest/locator",
+    "esri/Graphic"
+  ], function(Map, MapView, FeatureLayer, Legend, locator, Graphic) {
     const districtRenderer = {
       type: "unique-value",
       field: "DISTRICT",
@@ -47,6 +49,8 @@
       center: [-80.4, 27.3],
       zoom: 9
     });
+
+    const locatorUrl = "https://slcgis.stlucieco.gov/hosting/rest/services/AddressLocators/GeocodeServer";
 
     const legend = new Legend({
       view: view,
@@ -131,13 +135,54 @@
     const searchButton = document.getElementById('search-button');
     searchButton.addEventListener('click', () => {
         const address = document.getElementById('address-input').value;
-        // For now, we will mock the geocoding and randomly select a commissioner
-        // In a real application, you would use a geocoding service to get the district for the address
-        if (address && commissionersData.length) {
-            const randomIndex = Math.floor(Math.random() * commissionersData.length);
-            const randomCommissioner = commissionersData[randomIndex];
-            displayCommissioner(randomCommissioner);
+        if (!address) {
+            return;
         }
+
+        locator.addressToLocations(locatorUrl, {
+            address: { SingleLine: address },
+            maxLocations: 1
+        }).then(function(results){
+            if (!results.length) {
+                clearCommissionerInfo();
+                return;
+            }
+
+            const location = results[0].location;
+            const point = {
+                type: 'point',
+                x: location.x,
+                y: location.y,
+                spatialReference: location.spatialReference
+            };
+
+            view.graphics.removeAll();
+            view.graphics.add(new Graphic({
+                geometry: point,
+                symbol: { type: 'simple-marker', color: 'red', size: 8 }
+            }));
+            view.goTo({ target: point, zoom: 14 });
+
+            const query = districtLayer.createQuery();
+            query.geometry = point;
+            query.spatialRelationship = 'intersects';
+            query.outFields = ['DISTRICT'];
+            districtLayer.queryFeatures(query).then(function(res){
+                if (res.features.length) {
+                    const district = res.features[0].attributes.DISTRICT;
+                    const commissioner = commissionersData.find(c => c.district === district);
+                    if (commissioner) {
+                        displayCommissioner(commissioner);
+                    } else {
+                        clearCommissionerInfo();
+                    }
+                } else {
+                    clearCommissionerInfo();
+                }
+            });
+        }).catch(function(err){
+            console.error('Geocoding error', err);
+        });
     });
 
   function displayCommissioner(commissioner) {
