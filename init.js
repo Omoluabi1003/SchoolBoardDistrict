@@ -16,9 +16,11 @@
     "esri/views/MapView",
     "esri/layers/FeatureLayer",
     "esri/widgets/Legend",
+    "esri/widgets/Search",
+    "esri/tasks/Locator",
     "esri/rest/locator",
     "esri/Graphic"
-  ], function(Map, MapView, FeatureLayer, Legend, locator, Graphic) {
+  ], function(Map, MapView, FeatureLayer, Legend, Search, Locator, locator, Graphic) {
     const districtRenderer = {
       type: "unique-value",
       field: "DISTRICT",
@@ -54,9 +56,47 @@
 
     const legend = new Legend({
       view: view,
-      layerInfos: [{ layer: districtLayer, title: "School Board Districts" }]
+      layerInfos: [{ layer: districtLayer, title: "School Board Districts" }],
+      container: "legend-content"
     });
-    view.ui.add(legend, "bottom-left");
+
+    const locatorService = new Locator({ url: locatorUrl });
+    const searchWidget = new Search({
+      view: view,
+      includeDefaultSources: false,
+      sources: [{
+        locator: locatorService,
+        singleLineFieldName: "SingleLine",
+        placeholder: "Search address"
+      }]
+    });
+    view.ui.add(searchWidget, { position: "top-left", index: 0 });
+
+    searchWidget.on("select-result", function(event){
+      const point = event.result.feature.geometry;
+      view.goTo({ target: point, zoom: 14 });
+      const query = districtLayer.createQuery();
+      query.geometry = point;
+      query.spatialRelationship = "intersects";
+      query.outFields = ["DISTRICT"];
+      districtLayer.queryFeatures(query).then(function(res){
+        if(res.features.length){
+          const district = res.features[0].attributes.DISTRICT;
+          const commissioner = commissionersData.find(c => c.district === district);
+          if(commissioner){
+            displayCommissioner(commissioner);
+          }else{
+            clearCommissionerInfo();
+          }
+        }else{
+          clearCommissionerInfo();
+        }
+      });
+    });
+
+    document.getElementById('legend-button').addEventListener('click', function(){
+      document.getElementById('legend-panel').classList.toggle('open');
+    });
 
     view.whenLayerView(districtLayer).then(function(layerView) {
       let highlight;
@@ -132,58 +172,6 @@
       });
     });
 
-    const searchButton = document.getElementById('search-button');
-    searchButton.addEventListener('click', () => {
-        const address = document.getElementById('address-input').value;
-        if (!address) {
-            return;
-        }
-
-        locator.addressToLocations(locatorUrl, {
-            address: { SingleLine: address },
-            maxLocations: 1
-        }).then(function(results){
-            if (!results.length) {
-                clearCommissionerInfo();
-                return;
-            }
-
-            const location = results[0].location;
-            const point = {
-                type: 'point',
-                x: location.x,
-                y: location.y,
-                spatialReference: location.spatialReference
-            };
-
-            view.graphics.removeAll();
-            view.graphics.add(new Graphic({
-                geometry: point,
-                symbol: { type: 'simple-marker', color: 'red', size: 8 }
-            }));
-            view.goTo({ target: point, zoom: 14 });
-
-            const query = districtLayer.createQuery();
-            query.geometry = point;
-            query.spatialRelationship = 'intersects';
-            query.outFields = ['DISTRICT'];
-            districtLayer.queryFeatures(query).then(function(res){
-                if (res.features.length) {
-                    const district = res.features[0].attributes.DISTRICT;
-                    const commissioner = commissionersData.find(c => c.district === district);
-                    if (commissioner) {
-                        displayCommissioner(commissioner);
-                    } else {
-                        clearCommissionerInfo();
-                    }
-                } else {
-                    clearCommissionerInfo();
-                }
-            });
-        }).catch(function(err){
-            console.error('Geocoding error', err);
-        });
-    });
 
   function displayCommissioner(commissioner) {
     document.getElementById('commissioner-name').textContent = commissioner.name;
