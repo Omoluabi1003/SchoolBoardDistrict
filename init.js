@@ -15,8 +15,9 @@
     "esri/Map",
     "esri/views/MapView",
     "esri/layers/FeatureLayer",
-    "esri/widgets/Legend"
-  ], function(Map, MapView, FeatureLayer, Legend) {
+    "esri/widgets/Legend",
+    "esri/rest/locator"
+  ], function(Map, MapView, FeatureLayer, Legend, locator) {
     const districtRenderer = {
       type: "unique-value",
       field: "DISTRICT",
@@ -54,8 +55,13 @@
     });
     view.ui.add(legend, "bottom-left");
 
+    let highlight;
+    let districtLayerView;
+
+    const locatorUrl = "https://slcgis.stlucieco.gov/hosting/rest/services/AddressLocators/GeocodeServer";
+
     view.whenLayerView(districtLayer).then(function(layerView) {
-      let highlight;
+      districtLayerView = layerView;
       const districtSelect = document.getElementById("district-select");
       districtSelect.addEventListener("change", function(e) {
         if (highlight) {
@@ -130,14 +136,44 @@
 
     const searchButton = document.getElementById('search-button');
     searchButton.addEventListener('click', () => {
-        const address = document.getElementById('address-input').value;
-        // For now, we will mock the geocoding and randomly select a commissioner
-        // In a real application, you would use a geocoding service to get the district for the address
-        if (address && commissionersData.length) {
-            const randomIndex = Math.floor(Math.random() * commissionersData.length);
-            const randomCommissioner = commissionersData[randomIndex];
-            displayCommissioner(randomCommissioner);
+        const address = document.getElementById('address-input').value.trim();
+        if (!address || !districtLayerView) {
+            return;
         }
+
+        locator.addressToLocations(locatorUrl, {
+            address: { SingleLine: address },
+            maxLocations: 1
+        }).then(function(candidates) {
+            if (!candidates.length) {
+                alert('Address not found.');
+                return;
+            }
+
+            const candidate = candidates[0];
+            const point = candidate.location;
+            const query = districtLayer.createQuery();
+            query.geometry = point;
+            query.spatialRelationship = "intersects";
+            districtLayerView.queryFeatures(query).then(function(res) {
+                if (!res.features.length) {
+                    alert('District not found for the given address.');
+                    return;
+                }
+
+                const feature = res.features[0];
+                const district = feature.attributes.DISTRICT;
+                const commissioner = commissionersData.find(c => c.district === district);
+                if (commissioner) {
+                    displayCommissioner(commissioner);
+                }
+                if (highlight) {
+                    highlight.remove();
+                }
+                highlight = districtLayerView.highlight(feature);
+                view.goTo({ target: point, zoom: 12 });
+            });
+        });
     });
 
   function displayCommissioner(commissioner) {
