@@ -1,6 +1,8 @@
 // This is the main initialization script for the application.
 (function() {
   let commissionersData = [];
+  let districtLayerView;
+  let highlight;
   // Hide the loading indicator and show the main page
   var mainLoading = document.getElementById('main-loading');
   var mainPage = document.getElementById('main-page');
@@ -15,8 +17,10 @@
     "esri/Map",
     "esri/views/MapView",
     "esri/layers/FeatureLayer",
+    "esri/layers/GraphicsLayer",
+    "esri/Graphic",
     "esri/widgets/Legend"
-  ], function(Map, MapView, FeatureLayer, Legend) {
+  ], function(Map, MapView, FeatureLayer, GraphicsLayer, Graphic, Legend) {
     const districtRenderer = {
       type: "unique-value",
       field: "DISTRICT",
@@ -41,6 +45,9 @@
       layers: [districtLayer]
     });
 
+    const graphicsLayer = new GraphicsLayer();
+    map.add(graphicsLayer);
+
     const view = new MapView({
       container: "map-container",
       map: map,
@@ -55,7 +62,7 @@
     view.ui.add(legend, "bottom-left");
 
     view.whenLayerView(districtLayer).then(function(layerView) {
-      let highlight;
+      districtLayerView = layerView;
       const districtSelect = document.getElementById("district-select");
       districtSelect.addEventListener("change", function(e) {
         if (highlight) {
@@ -128,15 +135,53 @@
       });
     });
 
+    const geocodeUrl = "https://slcgis.stlucieco.gov/hosting/rest/services/AddressLocators/CompositeLocator/GeocodeServer";
     const searchButton = document.getElementById('search-button');
     searchButton.addEventListener('click', () => {
         const address = document.getElementById('address-input').value;
-        // For now, we will mock the geocoding and randomly select a commissioner
-        // In a real application, you would use a geocoding service to get the district for the address
-        if (address && commissionersData.length) {
-            const randomIndex = Math.floor(Math.random() * commissionersData.length);
-            const randomCommissioner = commissionersData[randomIndex];
-            displayCommissioner(randomCommissioner);
+        if (address) {
+            const params = new URLSearchParams({
+                SingleLine: address,
+                outFields: "*",
+                f: "json"
+            });
+            fetch(`${geocodeUrl}/findAddressCandidates?${params.toString()}`)
+                .then(resp => resp.json())
+                .then(data => {
+                    if (data.candidates && data.candidates.length > 0) {
+                        const candidate = data.candidates[0];
+                        const point = {
+                            type: "point",
+                            x: candidate.location.x,
+                            y: candidate.location.y,
+                            spatialReference: candidate.location.spatialReference
+                        };
+                        graphicsLayer.removeAll();
+                        graphicsLayer.add(new Graphic({
+                            geometry: point,
+                            symbol: { type: "simple-marker", color: "red", size: "12px", outline: { color: "white", width: 1 } }
+                        }));
+                        view.goTo({ target: point, zoom: 15 });
+
+                        const query = districtLayer.createQuery();
+                        query.geometry = point;
+                        districtLayer.queryFeatures(query).then(res => {
+                            if (res.features.length) {
+                                const district = res.features[0].attributes.DISTRICT;
+                                const commissioner = commissionersData.find(c => c.district === district);
+                                if (commissioner) {
+                                    displayCommissioner(commissioner);
+                                }
+                                if (districtLayerView) {
+                                    if (highlight) {
+                                        highlight.remove();
+                                    }
+                                    highlight = districtLayerView.highlight(res.features.map(f => f.attributes.OBJECTID));
+                                }
+                            }
+                        });
+                    }
+                });
         }
     });
 
