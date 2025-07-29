@@ -154,8 +154,37 @@
       }
 
 
-    #district-selection, #address-search {
+    #district-selection {
         margin-bottom: 20px;
+    }
+
+    #legend-panel {
+        position: absolute;
+        top: 50px;
+        left: 0;
+        bottom: 0;
+        width: 250px;
+        background-color: #fff;
+        box-shadow: 2px 0 4px rgba(0,0,0,0.3);
+        transform: translateX(-100%);
+        transition: transform 0.3s ease;
+        z-index: 10;
+        overflow-y: auto;
+    }
+
+    #legend-panel.open {
+        transform: translateX(0);
+    }
+
+    #legend-toggle {
+        position: absolute;
+        top: 60px;
+        right: 10px;
+        z-index: 11;
+    }
+
+    .esri-search {
+        width: 250px;
     }
 
     #commissioner-info img {
@@ -229,15 +258,13 @@
     <div class="trapLinkNode" tabindex="0"></div>
     <div id="jimu-layout-manager">
         <div id="map-container"></div>
+        <div id="legend-toggle" class="esri-widget esri-widget--button esri-interactive">
+            <span class="esri-icon-layer-list"></span>
+        </div>
         <div id="commissioner-details-container">
             <div id="district-selection">
                 <label for="district-select">Select a District:</label>
                 <select id="district-select"></select>
-            </div>
-            <div id="address-search">
-                <label for="address-input">Search for an Address:</label>
-                <input type="text" id="address-input" placeholder="Enter an address">
-                <button id="search-button">Search</button>
             </div>
             <div id="commissioner-info">
                 <h2 id="commissioner-name"></h2>
@@ -246,6 +273,9 @@
                 <p><a id="commissioner-email" href=""></a></p>
                 <img id="commissioner-image" src="" alt="Commissioner Image">
             </div>
+        </div>
+        <div id="legend-panel">
+            <div id="legendDiv"></div>
         </div>
     </div>
     <div id="skipContainer"></div>
