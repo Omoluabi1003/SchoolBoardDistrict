@@ -1,5 +1,6 @@
 // This is the main initialization script for the application.
 (function() {
+  let commissionersData = [];
   // Hide the loading indicator and show the main page
   var mainLoading = document.getElementById('main-loading');
   var mainPage = document.getElementById('main-page');
@@ -13,11 +14,26 @@
   require([
     "esri/Map",
     "esri/views/MapView",
-    "esri/layers/FeatureLayer"
-  ], function(Map, MapView, FeatureLayer) {
+    "esri/layers/FeatureLayer",
+    "esri/widgets/Legend"
+  ], function(Map, MapView, FeatureLayer, Legend) {
+    const districtRenderer = {
+      type: "unique-value",
+      field: "DISTRICT",
+      uniqueValueInfos: [
+        { value: "1", symbol: { type: "simple-fill", color: "#fbb4ae", outline: { color: "white", width: 1 } }, label: "District 1" },
+        { value: "2", symbol: { type: "simple-fill", color: "#b3cde3", outline: { color: "white", width: 1 } }, label: "District 2" },
+        { value: "3", symbol: { type: "simple-fill", color: "#ccebc5", outline: { color: "white", width: 1 } }, label: "District 3" },
+        { value: "4", symbol: { type: "simple-fill", color: "#decbe4", outline: { color: "white", width: 1 } }, label: "District 4" },
+        { value: "5", symbol: { type: "simple-fill", color: "#fed9a6", outline: { color: "white", width: 1 } }, label: "District 5" }
+      ]
+    };
+
     const districtLayer = new FeatureLayer({
       url: "https://slcgis.stlucieco.gov/hosting/rest/services/Political/SchoolBoardDistricts/MapServer/0",
-      outFields: ["*"]
+      outFields: ["*"],
+      renderer: districtRenderer,
+      popupEnabled: false
     });
 
     const map = new Map({
@@ -31,6 +47,12 @@
       center: [-80.4, 27.3],
       zoom: 9
     });
+
+    const legend = new Legend({
+      view: view,
+      layerInfos: [{ layer: districtLayer, title: "School Board Districts" }]
+    });
+    view.ui.add(legend, "bottom-left");
 
     view.whenLayerView(districtLayer).then(function(layerView) {
       let highlight;
@@ -52,6 +74,26 @@
           });
         }
       });
+
+      view.on("click", function(event) {
+        view.hitTest(event).then(function(response) {
+          const result = response.results.find(function(r) {
+            return r.graphic && r.graphic.layer === districtLayer;
+          });
+          if (result) {
+            const district = result.graphic.attributes.DISTRICT;
+            const commissioner = commissionersData.find(c => c.district === district);
+            if (commissioner) {
+              const content = `<div class="popup-commissioner"><img src="${commissioner.image}" alt="Commissioner"><div><strong>${commissioner.name}</strong><br>${commissioner.title}<br><a href="mailto:${commissioner.email}">${commissioner.email}</a></div></div>`;
+              view.popup.open({
+                title: `District ${district}`,
+                location: event.mapPoint,
+                content: content
+              });
+            }
+          }
+        });
+      });
     });
   });
 
@@ -59,6 +101,7 @@
   fetch('commissioners.json')
     .then(response => response.json())
     .then(commissioners => {
+      commissionersData = commissioners;
       const districtSelect = document.getElementById('district-select');
 
       // Add a default option
@@ -90,14 +133,10 @@
         const address = document.getElementById('address-input').value;
         // For now, we will mock the geocoding and randomly select a commissioner
         // In a real application, you would use a geocoding service to get the district for the address
-        if (address) {
-            fetch('commissioners.json')
-                .then(response => response.json())
-                .then(commissioners => {
-                    const randomIndex = Math.floor(Math.random() * commissioners.length);
-                    const randomCommissioner = commissioners[randomIndex];
-                    displayCommissioner(randomCommissioner);
-                });
+        if (address && commissionersData.length) {
+            const randomIndex = Math.floor(Math.random() * commissionersData.length);
+            const randomCommissioner = commissionersData[randomIndex];
+            displayCommissioner(randomCommissioner);
         }
     });
 
