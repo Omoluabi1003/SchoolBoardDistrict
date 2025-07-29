@@ -10,6 +10,51 @@
   // You can add your application's initialization logic here.
   console.log('Application initialized.');
 
+  require([
+    "esri/Map",
+    "esri/views/MapView",
+    "esri/layers/FeatureLayer"
+  ], function(Map, MapView, FeatureLayer) {
+    const districtLayer = new FeatureLayer({
+      url: "https://slcgis.stlucieco.gov/hosting/rest/services/Political/SchoolBoardDistricts/MapServer/0",
+      outFields: ["*"]
+    });
+
+    const map = new Map({
+      basemap: "streets-navigation-vector",
+      layers: [districtLayer]
+    });
+
+    const view = new MapView({
+      container: "map-container",
+      map: map,
+      center: [-80.4, 27.3],
+      zoom: 9
+    });
+
+    view.whenLayerView(districtLayer).then(function(layerView) {
+      let highlight;
+      const districtSelect = document.getElementById("district-select");
+      districtSelect.addEventListener("change", function(e) {
+        if (highlight) {
+          highlight.remove();
+          highlight = null;
+        }
+        const district = e.target.value;
+        if (district) {
+          const query = districtLayer.createQuery();
+          query.where = "DISTRICT = '" + district + "'";
+          layerView.queryFeatures(query).then(function(res) {
+            if (res.features.length) {
+              highlight = layerView.highlight(res.features.map(f => f.attributes.OBJECTID));
+              view.goTo(res.features[0].geometry.extent.expand(1.5));
+            }
+          });
+        }
+      });
+    });
+  });
+
   // Fetch commissioner data and populate the dropdown
   fetch('commissioners.json')
     .then(response => response.json())
