@@ -16,9 +16,9 @@
     "esri/views/MapView",
     "esri/layers/FeatureLayer",
     "esri/widgets/Legend",
-    "esri/rest/locator",
-    "esri/Graphic"
-  ], function(Map, MapView, FeatureLayer, Legend, locator, Graphic) {
+    "esri/widgets/Search",
+    "esri/tasks/Locator"
+  ], function(Map, MapView, FeatureLayer, Legend, Search, Locator) {
     const districtRenderer = {
       type: "unique-value",
       field: "DISTRICT",
@@ -54,9 +54,14 @@
 
     const legend = new Legend({
       view: view,
+      container: "legendDiv",
       layerInfos: [{ layer: districtLayer, title: "School Board Districts" }]
     });
-    view.ui.add(legend, "bottom-left");
+    view.ui.add("legend-toggle", "top-right");
+
+    document.getElementById("legend-toggle").addEventListener("click", function(){
+      document.getElementById("legend-panel").classList.toggle("open");
+    });
 
     view.whenLayerView(districtLayer).then(function(layerView) {
       let highlight;
@@ -132,57 +137,50 @@
       });
     });
 
-    const searchButton = document.getElementById('search-button');
-    searchButton.addEventListener('click', () => {
-        const address = document.getElementById('address-input').value;
-        if (!address) {
-            return;
-        }
+    const searchWidget = new Search({
+      view: view,
+      includeDefaultSources: false,
+      sources: [{
+        locator: new Locator({ url: locatorUrl }),
+        singleLineFieldName: "SingleLine",
+        placeholder: "Search address"
+      }]
+    });
+    view.ui.add(searchWidget, { position: "top-left", index: 0 });
 
-        locator.addressToLocations(locatorUrl, {
-            address: { SingleLine: address },
-            maxLocations: 1
-        }).then(function(results){
-            if (!results.length) {
-                clearCommissionerInfo();
-                return;
-            }
+    searchWidget.on("search-complete", function(event){
+      if(!event || !event.results.length || !event.results[0].results.length){
+        clearCommissionerInfo();
+        return;
+      }
+      const result = event.results[0].results[0];
+      const point = result.feature.geometry;
+      const address = result.name;
 
-            const location = results[0].location;
-            const point = {
-                type: 'point',
-                x: location.x,
-                y: location.y,
-                spatialReference: location.spatialReference
-            };
+      const query = districtLayer.createQuery();
+      query.geometry = point;
+      query.spatialRelationship = "intersects";
+      query.outFields = ["DISTRICT"];
 
-            view.graphics.removeAll();
-            view.graphics.add(new Graphic({
-                geometry: point,
-                symbol: { type: 'simple-marker', color: 'red', size: 8 }
-            }));
-            view.goTo({ target: point, zoom: 14 });
-
-            const query = districtLayer.createQuery();
-            query.geometry = point;
-            query.spatialRelationship = 'intersects';
-            query.outFields = ['DISTRICT'];
-            districtLayer.queryFeatures(query).then(function(res){
-                if (res.features.length) {
-                    const district = res.features[0].attributes.DISTRICT;
-                    const commissioner = commissionersData.find(c => c.district === district);
-                    if (commissioner) {
-                        displayCommissioner(commissioner);
-                    } else {
-                        clearCommissionerInfo();
-                    }
-                } else {
-                    clearCommissionerInfo();
-                }
+      districtLayer.queryFeatures(query).then(function(res){
+        if(res.features.length){
+          const district = res.features[0].attributes.DISTRICT;
+          const commissioner = commissionersData.find(c => c.district === district);
+          if(commissioner){
+            displayCommissioner(commissioner);
+            const content = `<div class="popup-commissioner"><img src="${commissioner.image}" alt="Commissioner"><div><strong>${commissioner.name}</strong><br>${commissioner.title}<br><a href="mailto:${commissioner.email}">${commissioner.email}</a><br>${address}</div></div>`;
+            view.popup.open({
+              title: `District ${district}`,
+              location: point,
+              content: content
             });
-        }).catch(function(err){
-            console.error('Geocoding error', err);
-        });
+          } else {
+            clearCommissionerInfo();
+          }
+        } else {
+          clearCommissionerInfo();
+        }
+      });
     });
 
   function displayCommissioner(commissioner) {
