@@ -1,5 +1,10 @@
 // This is the main initialization script for the application.
 (function() {
+  let commissionersData = [];
+  let districtLayer;
+  let view;
+  let locator;
+  const geocodeUrl = "https://slcgis.stlucieco.gov/hosting/rest/services/AddressLocators/SLCAddressLocator/GeocodeServer";
   // Hide the loading indicator and show the main page
   var mainLoading = document.getElementById('main-loading');
   var mainPage = document.getElementById('main-page');
@@ -13,11 +18,29 @@
   require([
     "esri/Map",
     "esri/views/MapView",
-    "esri/layers/FeatureLayer"
-  ], function(Map, MapView, FeatureLayer) {
-    const districtLayer = new FeatureLayer({
+    "esri/layers/FeatureLayer",
+    "esri/widgets/Legend",
+    "esri/widgets/Search",
+    "esri/tasks/Locator",
+    "esri/rest/locator"
+  ], function(Map, MapView, FeatureLayer, Legend, Search, Locator, locatorModule) {
+    const districtRenderer = {
+      type: "unique-value",
+      field: "DISTRICT",
+      uniqueValueInfos: [
+        { value: "1", symbol: { type: "simple-fill", color: "#fbb4ae", outline: { color: "white", width: 1 } }, label: "District 1" },
+        { value: "2", symbol: { type: "simple-fill", color: "#b3cde3", outline: { color: "white", width: 1 } }, label: "District 2" },
+        { value: "3", symbol: { type: "simple-fill", color: "#ccebc5", outline: { color: "white", width: 1 } }, label: "District 3" },
+        { value: "4", symbol: { type: "simple-fill", color: "#decbe4", outline: { color: "white", width: 1 } }, label: "District 4" },
+        { value: "5", symbol: { type: "simple-fill", color: "#fed9a6", outline: { color: "white", width: 1 } }, label: "District 5" }
+      ]
+    };
+
+    districtLayer = new FeatureLayer({
       url: "https://slcgis.stlucieco.gov/hosting/rest/services/Political/SchoolBoardDistricts/MapServer/0",
-      outFields: ["*"]
+      outFields: ["*"],
+      renderer: districtRenderer,
+      popupEnabled: false
     });
 
     const map = new Map({
@@ -25,12 +48,31 @@
       layers: [districtLayer]
     });
 
-    const view = new MapView({
+    view = new MapView({
       container: "map-container",
       map: map,
       center: [-80.4, 27.3],
       zoom: 9
     });
+
+    locator = locatorModule;
+
+    const legend = new Legend({
+      view: view,
+      layerInfos: [{ layer: districtLayer, title: "School Board Districts" }]
+    });
+    view.ui.add(legend, "bottom-left");
+
+    const searchWidget = new Search({
+      view: view,
+      includeDefaultSources: false,
+      sources: [{
+        locator: new Locator({ url: geocodeUrl }),
+        singleLineFieldName: "SingleLine",
+        placeholder: "Search address"
+      }]
+    });
+    view.ui.add(searchWidget, "top-right");
 
     view.whenLayerView(districtLayer).then(function(layerView) {
       let highlight;
@@ -52,6 +94,26 @@
           });
         }
       });
+
+      view.on("click", function(event) {
+        view.hitTest(event).then(function(response) {
+          const result = response.results.find(function(r) {
+            return r.graphic && r.graphic.layer === districtLayer;
+          });
+          if (result) {
+            const district = result.graphic.attributes.DISTRICT;
+            const commissioner = commissionersData.find(c => c.district === district);
+            if (commissioner) {
+              const content = `<div class="popup-commissioner"><img src="${commissioner.image}" alt="Commissioner"><div><strong>${commissioner.name}</strong><br>${commissioner.title}<br><a href="mailto:${commissioner.email}">${commissioner.email}</a></div></div>`;
+              view.popup.open({
+                title: `District ${district}`,
+                location: event.mapPoint,
+                content: content
+              });
+            }
+          }
+        });
+      });
     });
   });
 
@@ -59,6 +121,7 @@
   fetch('commissioners.json')
     .then(response => response.json())
     .then(commissioners => {
+      commissionersData = commissioners;
       const districtSelect = document.getElementById('district-select');
 
       // Add a default option
@@ -88,17 +151,43 @@
     const searchButton = document.getElementById('search-button');
     searchButton.addEventListener('click', () => {
         const address = document.getElementById('address-input').value;
-        // For now, we will mock the geocoding and randomly select a commissioner
-        // In a real application, you would use a geocoding service to get the district for the address
-        if (address) {
-            fetch('commissioners.json')
-                .then(response => response.json())
-                .then(commissioners => {
-                    const randomIndex = Math.floor(Math.random() * commissioners.length);
-                    const randomCommissioner = commissioners[randomIndex];
-                    displayCommissioner(randomCommissioner);
-                });
+        if (!address) {
+            return;
         }
+
+        locator.addressToLocations(geocodeUrl, {
+            address: { SingleLine: address },
+            maxLocations: 1
+        }).then((candidates) => {
+            if (!candidates.length) {
+                alert('Address not found');
+                return;
+            }
+            const location = candidates[0].location;
+            const query = districtLayer.createQuery();
+            query.geometry = location;
+            query.spatialRelationship = "intersects";
+            districtLayer.queryFeatures(query).then((res) => {
+                if (res.features.length) {
+                    const district = res.features[0].attributes.DISTRICT;
+                    const commissioner = commissionersData.find(c => c.district === district);
+                    if (commissioner) {
+                        displayCommissioner(commissioner);
+                        view.goTo({ target: location, zoom: 14 });
+                        const content = `<div class="popup-commissioner"><img src="${commissioner.image}" alt="Commissioner"><div><strong>${commissioner.name}</strong><br>${commissioner.title}<br><a href="mailto:${commissioner.email}">${commissioner.email}</a></div></div>`;
+                        view.popup.open({
+                            title: `District ${district}`,
+                            location: location,
+                            content: content
+                        });
+                    }
+                } else {
+                    alert('Address not within a school board district');
+                }
+            });
+        }).catch((err) => {
+            console.error(err);
+        });
     });
 
   function displayCommissioner(commissioner) {
