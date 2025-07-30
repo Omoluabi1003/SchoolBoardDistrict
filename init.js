@@ -23,11 +23,11 @@
       type: "unique-value",
       field: "DISTRICT",
       uniqueValueInfos: [
-        { value: "1", symbol: { type: "simple-fill", color: "#fbb4ae", outline: { color: "white", width: 1 } }, label: "District 1" },
-        { value: "2", symbol: { type: "simple-fill", color: "#b3cde3", outline: { color: "white", width: 1 } }, label: "District 2" },
-        { value: "3", symbol: { type: "simple-fill", color: "#ccebc5", outline: { color: "white", width: 1 } }, label: "District 3" },
-        { value: "4", symbol: { type: "simple-fill", color: "#decbe4", outline: { color: "white", width: 1 } }, label: "District 4" },
-        { value: "5", symbol: { type: "simple-fill", color: "#fed9a6", outline: { color: "white", width: 1 } }, label: "District 5" }
+        { value: "1", symbol: { type: "simple-fill", color: [251, 180, 174, 0.5], outline: { color: "white", width: 1 } }, label: "District 1" },
+        { value: "2", symbol: { type: "simple-fill", color: [179, 205, 227, 0.5], outline: { color: "white", width: 1 } }, label: "District 2" },
+        { value: "3", symbol: { type: "simple-fill", color: [204, 235, 197, 0.5], outline: { color: "white", width: 1 } }, label: "District 3" },
+        { value: "4", symbol: { type: "simple-fill", color: [222, 203, 228, 0.5], outline: { color: "white", width: 1 } }, label: "District 4" },
+        { value: "5", symbol: { type: "simple-fill", color: [254, 217, 166, 0.5], outline: { color: "white", width: 1 } }, label: "District 5" }
       ]
     };
 
