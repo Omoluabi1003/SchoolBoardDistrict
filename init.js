@@ -15,19 +15,25 @@
     "esri/Map",
     "esri/views/MapView",
     "esri/layers/FeatureLayer",
+    "esri/layers/GraphicsLayer",
+    "esri/Graphic",
     "esri/widgets/Legend",
     "esri/widgets/Search",
-    "esri/tasks/Locator"
-  ], function(Map, MapView, FeatureLayer, Legend, Search, Locator) {
+    "esri/tasks/Locator",
+    "esri/config"
+  ], function(Map, MapView, FeatureLayer, GraphicsLayer, Graphic, Legend, Search, Locator, esriConfig) {
+    if(window.appConfig && window.appConfig.apiKey){
+      esriConfig.apiKey = window.appConfig.apiKey;
+    }
     const districtRenderer = {
       type: "unique-value",
       field: "DISTRICT",
       uniqueValueInfos: [
-        { value: "1", symbol: { type: "simple-fill", color: [251, 180, 174, 0.5], outline: { color: "white", width: 1 } }, label: "District 1" },
-        { value: "2", symbol: { type: "simple-fill", color: [179, 205, 227, 0.5], outline: { color: "white", width: 1 } }, label: "District 2" },
-        { value: "3", symbol: { type: "simple-fill", color: [204, 235, 197, 0.5], outline: { color: "white", width: 1 } }, label: "District 3" },
-        { value: "4", symbol: { type: "simple-fill", color: [222, 203, 228, 0.5], outline: { color: "white", width: 1 } }, label: "District 4" },
-        { value: "5", symbol: { type: "simple-fill", color: [254, 217, 166, 0.5], outline: { color: "white", width: 1 } }, label: "District 5" }
+        { value: "1", symbol: { type: "simple-fill", color: [251, 180, 174, 0.3], outline: { color: "white", width: 1 } }, label: "District 1" },
+        { value: "2", symbol: { type: "simple-fill", color: [179, 205, 227, 0.3], outline: { color: "white", width: 1 } }, label: "District 2" },
+        { value: "3", symbol: { type: "simple-fill", color: [204, 235, 197, 0.3], outline: { color: "white", width: 1 } }, label: "District 3" },
+        { value: "4", symbol: { type: "simple-fill", color: [222, 203, 228, 0.3], outline: { color: "white", width: 1 } }, label: "District 4" },
+        { value: "5", symbol: { type: "simple-fill", color: [254, 217, 166, 0.3], outline: { color: "white", width: 1 } }, label: "District 5" }
       ]
     };
 
@@ -38,9 +44,11 @@
       popupEnabled: false
     });
 
+    const addressLayer = new GraphicsLayer();
+
     const map = new Map({
-      basemap: "streets-navigation-vector",
-      layers: [districtLayer]
+      basemap: (window.appConfig && window.appConfig.basemap) ? window.appConfig.basemap : "streets-navigation-vector",
+      layers: [districtLayer, addressLayer]
     });
 
     const view = new MapView({
@@ -169,6 +177,31 @@
           if(commissioner){
             displayCommissioner(commissioner);
             const content = `<div class="popup-commissioner"><img src="${commissioner.image}" alt="Commissioner"><div><strong>${commissioner.name}</strong><br>${commissioner.title}<br><a href="mailto:${commissioner.email}">${commissioner.email}</a><br>${address}</div></div>`;
+            addressLayer.removeAll();
+            const photoGraphic = new Graphic({
+              geometry: point,
+              symbol: {
+                type: "picture-marker",
+                url: commissioner.image,
+                width: "40px",
+                height: "50px",
+                yoffset: 20
+              }
+            });
+            const textGraphic = new Graphic({
+              geometry: point,
+              symbol: {
+                type: "text",
+                text: `District ${district}\n${commissioner.name}`,
+                yoffset: -40,
+                color: "black",
+                haloColor: "white",
+                haloSize: "1px",
+                font: { size: 12, family: "sans-serif" }
+              }
+            });
+            addressLayer.addMany([photoGraphic, textGraphic]);
+            view.goTo({ target: point, zoom: 16 });
             view.popup.open({
               title: `District ${district}`,
               location: point,
