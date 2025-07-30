@@ -16,9 +16,10 @@
     "esri/views/MapView",
     "esri/layers/FeatureLayer",
     "esri/widgets/Legend",
+    "esri/widgets/Search",
     "esri/rest/locator",
     "esri/Graphic"
-  ], function(Map, MapView, FeatureLayer, Legend, locator, Graphic) {
+  ], function(Map, MapView, FeatureLayer, Legend, Search, locator, Graphic) {
     const districtRenderer = {
       type: "unique-value",
       field: "DISTRICT",
@@ -52,11 +53,35 @@
 
     const locatorUrl = "https://slcgis.stlucieco.gov/hosting/rest/services/AddressLocators/GeocodeServer";
 
+    const searchWidget = new Search({
+      view: view,
+      includeDefaultSources: false,
+      sources: [{
+        locator: locator({ url: locatorUrl }),
+        singleLineFieldName: "SingleLine",
+        name: "Address",
+        placeholder: "Search address"
+      }]
+    });
+    view.ui.add(searchWidget, { position: "top-left", index: 0 });
+    const searchContainer = document.getElementById("search-container");
+    if (searchContainer) {
+      searchContainer.appendChild(searchWidget.container);
+    }
+
     const legend = new Legend({
       view: view,
+      container: "legendDiv",
       layerInfos: [{ layer: districtLayer, title: "School Board Districts" }]
     });
-    view.ui.add(legend, "bottom-left");
+
+    const legendToggle = document.getElementById("legend-toggle");
+    const legendPanel = document.getElementById("legend-panel");
+    if (legendToggle && legendPanel) {
+      legendToggle.addEventListener("click", function() {
+        legendPanel.classList.toggle("open");
+      });
+    }
 
     view.whenLayerView(districtLayer).then(function(layerView) {
       let highlight;
@@ -125,70 +150,47 @@
         const selectedDistrict = event.target.value;
         if (selectedDistrict) {
           const selectedCommissioner = commissioners.find(c => c.district === selectedDistrict);
-          displayCommissioner(selectedCommissioner);
+          displayCommissioner(selectedCommissioner, "");
         } else {
             clearCommissionerInfo();
         }
       });
     });
 
-    const searchButton = document.getElementById('search-button');
-    searchButton.addEventListener('click', () => {
-        const address = document.getElementById('address-input').value;
-        if (!address) {
-            return;
+    searchWidget.on("select-result", function(event) {
+      const point = event.result.feature.geometry;
+      const address = event.result.name;
+      view.graphics.removeAll();
+      view.graphics.add(new Graphic({
+        geometry: point,
+        symbol: { type: "simple-marker", color: "red", size: 8 }
+      }));
+      view.goTo({ target: point, zoom: 14 });
+
+      const query = districtLayer.createQuery();
+      query.geometry = point;
+      query.spatialRelationship = "intersects";
+      query.outFields = ["DISTRICT"];
+      districtLayer.queryFeatures(query).then(function(res){
+        if (res.features.length) {
+          const district = res.features[0].attributes.DISTRICT;
+          const commissioner = commissionersData.find(c => c.district === district);
+          if (commissioner) {
+            displayCommissioner(commissioner, address);
+          } else {
+            clearCommissionerInfo();
+          }
+        } else {
+          clearCommissionerInfo();
         }
-
-        locator.addressToLocations(locatorUrl, {
-            address: { SingleLine: address },
-            maxLocations: 1
-        }).then(function(results){
-            if (!results.length) {
-                clearCommissionerInfo();
-                return;
-            }
-
-            const location = results[0].location;
-            const point = {
-                type: 'point',
-                x: location.x,
-                y: location.y,
-                spatialReference: location.spatialReference
-            };
-
-            view.graphics.removeAll();
-            view.graphics.add(new Graphic({
-                geometry: point,
-                symbol: { type: 'simple-marker', color: 'red', size: 8 }
-            }));
-            view.goTo({ target: point, zoom: 14 });
-
-            const query = districtLayer.createQuery();
-            query.geometry = point;
-            query.spatialRelationship = 'intersects';
-            query.outFields = ['DISTRICT'];
-            districtLayer.queryFeatures(query).then(function(res){
-                if (res.features.length) {
-                    const district = res.features[0].attributes.DISTRICT;
-                    const commissioner = commissionersData.find(c => c.district === district);
-                    if (commissioner) {
-                        displayCommissioner(commissioner);
-                    } else {
-                        clearCommissionerInfo();
-                    }
-                } else {
-                    clearCommissionerInfo();
-                }
-            });
-        }).catch(function(err){
-            console.error('Geocoding error', err);
-        });
+      });
     });
 
-  function displayCommissioner(commissioner) {
+  function displayCommissioner(commissioner, address) {
     document.getElementById('commissioner-name').textContent = commissioner.name;
     document.getElementById('commissioner-title').textContent = commissioner.title;
     document.getElementById('commissioner-district').textContent = `District ${commissioner.district}`;
+    document.getElementById('search-address').textContent = address || '';
     const emailLink = document.getElementById('commissioner-email');
     emailLink.textContent = commissioner.email;
     emailLink.href = `mailto:${commissioner.email}`;
@@ -199,6 +201,7 @@
     document.getElementById('commissioner-name').textContent = '';
     document.getElementById('commissioner-title').textContent = '';
     document.getElementById('commissioner-district').textContent = '';
+    document.getElementById('search-address').textContent = '';
     const emailLink = document.getElementById('commissioner-email');
     emailLink.textContent = '';
     emailLink.href = '';

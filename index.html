@@ -154,8 +154,55 @@
       }
 
 
-    #district-selection, #address-search {
+    #district-selection {
         margin-bottom: 20px;
+    }
+
+    #search-container {
+        position: absolute;
+        top: 60px;
+        left: 10px;
+        z-index: 10;
+        width: 250px;
+    }
+
+    #legend-panel {
+        position: absolute;
+        top: 50px;
+        left: 0;
+        bottom: 0;
+        width: 250px;
+        background: #fff;
+        box-shadow: 2px 0 4px rgba(0,0,0,0.2);
+        transform: translateX(-100%);
+        transition: transform 0.3s ease;
+        z-index: 9;
+        overflow-y: auto;
+        padding: 10px;
+    }
+
+    #legend-panel.open {
+        transform: translateX(0);
+    }
+
+    #legend-toggle {
+        position: absolute;
+        top: 60px;
+        left: 10px;
+        z-index: 11;
+    }
+
+    @media (max-width: 600px) {
+        #search-container {
+            width: 160px;
+            left: 5px;
+        }
+        #legend-panel {
+            width: 200px;
+        }
+        #legend-toggle {
+            left: 5px;
+        }
     }
 
     #commissioner-info img {
@@ -229,20 +276,19 @@
     <div class="trapLinkNode" tabindex="0"></div>
     <div id="jimu-layout-manager">
         <div id="map-container"></div>
+        <div id="search-container"></div>
+        <button id="legend-toggle">Legend</button>
+        <div id="legend-panel"><div id="legendDiv"></div></div>
         <div id="commissioner-details-container">
             <div id="district-selection">
                 <label for="district-select">Select a District:</label>
                 <select id="district-select"></select>
             </div>
-            <div id="address-search">
-                <label for="address-input">Search for an Address:</label>
-                <input type="text" id="address-input" placeholder="Enter an address">
-                <button id="search-button">Search</button>
-            </div>
             <div id="commissioner-info">
                 <h2 id="commissioner-name"></h2>
                 <p id="commissioner-title"></p>
                 <p id="commissioner-district"></p>
+                <p id="search-address"></p>
                 <p><a id="commissioner-email" href=""></a></p>
                 <img id="commissioner-image" src="" alt="Commissioner Image">
             </div>
